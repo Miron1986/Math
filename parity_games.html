@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Четыре игры на чётность</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:780px;margin:16px auto;padding:0 12px;background:#f4f6fa;color:#222}
+h2{margin:6px 0}
+.tabs button{background:#e5e7eb;color:#222}.tabs button.on{background:#3b82f6;color:#fff}
+button{padding:8px 14px;margin:3px;border:0;border-radius:8px;background:#3b82f6;color:#fff;font-size:15px;cursor:pointer}
+button.alt{background:#10b981}button.gray{background:#6b7280}
+.card{background:#fff;border-radius:12px;padding:16px;margin-top:10px;box-shadow:0 1px 4px #0002}
+.game{display:none}.game.on{display:block}
+.msg{font-size:18px;font-weight:600;margin:8px 0;min-height:26px}
+.ok{color:#059669}.bad{color:#dc2626}
+.hint{color:#7c3aed;margin-top:8px}
+select,input{padding:4px;font-size:15px}
+.coin{display:inline-block;width:62px;height:62px;line-height:62px;border-radius:50%;text-align:center;font-weight:700;margin:6px;cursor:pointer;border:4px solid transparent;user-select:none}
+.coin.H{background:#fbbf24}.coin.T{background:#9ca3af;color:#fff}.coin.sel{border-color:#ef4444}
+.sg{display:inline-block;width:56px;margin:4px;text-align:center}
+.sg button{width:56px;margin:0;padding:6px 0}
+.sg .p{background:#10b981}.sg .m{background:#ef4444}
+table.b{border-collapse:collapse;margin:8px auto}
+table.b td{width:44px;height:44px;text-align:center;font-size:26px;border:1px solid #888;padding:0}
+td.w{background:#f3e8c8}td.k{background:#a67c52}td.leg{outline:3px solid #3b82f6;outline-offset:-3px;cursor:pointer}
+td.start{box-shadow:inset 0 0 0 3px #10b981}
+svg text{pointer-events:none}
+</style></head><body>
+<h2>Четыре игры на чётность</h2>
+<div class="tabs">
+<button onclick="tab(1)" id="t1">1. Монетки</button>
+<button onclick="tab(2)" id="t2">2. Рукопожатия</button>
+<button onclick="tab(3)" id="t3">3. Плюсы и минусы</button>
+<button onclick="tab(4)" id="t4">4. Конь</button>
+</div>
+
+<div class="card game" id="g1">
+<b>Монетки.</b> Все монетки лежат орлом вверх. За ход переверни ровно две. Цель: чтобы все лежали решкой.<br>
+Монет: <select id="c_n" onchange="c_init()"><option>4</option><option selected>5</option><option>6</option><option>7</option></select>
+<div id="c_board"></div>
+<button onclick="c_flip()">Перевернуть выбранные две</button><button class="gray" onclick="c_init()">Заново</button>
+<button class="alt" onclick="c_hint()">Подсказка</button>
+<div>Ходов: <b id="c_moves">0</b>, решек: <b id="c_t">0</b></div>
+<div class="msg" id="c_msg"></div><div class="hint" id="c_h"></div>
+</div>
+
+<div class="card game" id="g2">
+<b>Рукопожатия.</b> Соединяй людей линиями (клик по двум точкам; повторный клик по той же паре удаляет линию). Цель: чтобы у каждого было ровно столько рукопожатий, сколько задано.<br>
+Людей: <select id="h_n" onchange="h_init()"><option>4</option><option>5</option><option selected>6</option><option>7</option><option>8</option><option>9</option></select>
+Каждому нужно: <select id="h_k" onchange="h_init()"><option>1</option><option>2</option><option selected>3</option><option>4</option></select>
+<div><svg id="h_svg" width="360" height="360" viewBox="0 0 360 360"></svg></div>
+<button class="gray" onclick="h_init()">Очистить</button><button class="alt" onclick="h_hint()">Подсказка</button>
+<div class="msg" id="h_msg"></div><div class="hint" id="h_h"></div>
+</div>
+
+<div class="card game" id="g3">
+<b>Плюсы и минусы.</b> Перед каждым числом стоит «+» или «−» (клик переключает). Цель: получить сумму 0.<br>
+Числа от 1 до: <input type="number" id="s_n" value="10" min="2" max="30" style="width:60px" onchange="s_init()">
+<div id="s_board"></div>
+<div>Сумма: <b id="s_sum" style="font-size:24px"></b></div>
+<button class="gray" onclick="s_init()">Всё «+»</button><button class="alt" onclick="s_hint()">Подсказка</button>
+<div class="msg" id="s_msg"></div><div class="hint" id="s_h"></div>
+</div>
+
+<div class="card game" id="g4">
+<b>Конь.</b> Конь стоит в левом нижнем углу (зелёная рамка). Цель: вернуться на эту клетку ровно за заданное число ходов.<br>
+Число ходов: <select id="k_t" onchange="k_init()"><option>6</option><option>7</option><option selected>15</option><option>16</option></select>
+<label><input type="checkbox" id="k_leg" checked onchange="k_draw()"> подсвечивать ходы</label>
+<table class="b" id="k_tab"></table>
+<div>Сделано ходов: <b id="k_cnt">0</b></div>
+<button class="gray" onclick="k_init()">Заново</button><button class="gray" onclick="k_undo()">Отмена хода</button><button class="alt" onclick="k_hint()">Подсказка</button>
+<div class="msg" id="k_msg"></div><div class="hint" id="k_h"></div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+function tab(i){for(let j=1;j<=4;j++){$("g"+j).classList.toggle("on",i==j);$("t"+j).classList.toggle("on",i==j);}}
+function say(id,t,c){const e=$(id);e.textContent=t;e.className="msg "+(c||"");}
+
+/* 1. Монетки */
+let c_s=[],c_sel=[],c_m=0;
+function c_init(){const n=+$("c_n").value;c_s=Array(n).fill(0);c_sel=[];c_m=0;say("c_msg","");$("c_h").textContent="";c_draw();}
+function c_draw(){
+ let h="";c_s.forEach((v,i)=>{h+='<span class="coin '+(v?'T':'H')+(c_sel.includes(i)?' sel':'')+'" onclick="c_click('+i+')">'+(v?'Р':'О')+'</span>'});
+ $("c_board").innerHTML=h;$("c_moves").textContent=c_m;$("c_t").textContent=c_s.reduce((a,b)=>a+b,0);}
+function c_click(i){const k=c_sel.indexOf(i);if(k>=0)c_sel.splice(k,1);else{if(c_sel.length>=2)c_sel.shift();c_sel.push(i);}c_draw();}
+function c_flip(){
+ if(c_sel.length!=2){say("c_msg","Выбери ровно две монетки.","bad");return;}
+ c_sel.forEach(i=>c_s[i]^=1);c_sel=[];c_m++;c_draw();
+ if(c_s.every(v=>v==1))say("c_msg","Получилось за "+c_m+" ходов! Все решки.","ok");else say("c_msg","");}
+function c_hint(){const n=c_s.length;
+ $("c_h").textContent="Следи за числом решек. Каждый ход меняет его на 2 вверх, на 2 вниз или не меняет. Сейчас решек "+c_s.reduce((a,b)=>a+b,0)+", а нужно "+n+". Как у них чётность: одинаковая или разная?";}
+
+/* 2. Рукопожатия */
+let h_e=[],h_sel=-1,h_pos=[];
+function h_init(){const n=+$("h_n").value;h_e=[];h_sel=-1;h_pos=[];
+ for(let i=0;i<n;i++){const a=2*Math.PI*i/n-Math.PI/2;h_pos.push([180+130*Math.cos(a),180+130*Math.sin(a)]);}
+ say("h_msg","");$("h_h").textContent="";h_draw();}
+function h_deg(i){return h_e.filter(e=>e[0]==i||e[1]==i).length;}
+function h_draw(){
+ const k=+$("h_k").value;let s="";
+ h_e.forEach(e=>{s+='<line x1="'+h_pos[e[0]][0]+'" y1="'+h_pos[e[0]][1]+'" x2="'+h_pos[e[1]][0]+'" y2="'+h_pos[e[1]][1]+'" stroke="#374151" stroke-width="3"/>';});
+ h_pos.forEach((p,i)=>{const d=h_deg(i);const col=d==k?'#10b981':(d>k?'#ef4444':'#fbbf24');
+  s+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="20" fill="'+col+'" stroke="'+(h_sel==i?'#2563eb':'#111')+'" stroke-width="'+(h_sel==i?5:2)+'" style="cursor:pointer" onclick="h_click('+i+')"/>';
+  s+='<text x="'+p[0]+'" y="'+(p[1]+6)+'" text-anchor="middle" font-size="18" font-weight="700">'+d+'</text>';});
+ $("h_svg").innerHTML=s;
+ if(h_pos.every((p,i)=>h_deg(i)==k))say("h_msg","Получилось! У всех ровно "+k+".","ok");else say("h_msg","");}
+function h_click(i){
+ if(h_sel<0){h_sel=i;}else if(h_sel==i){h_sel=-1;}else{
+  const a=Math.min(h_sel,i),b=Math.max(h_sel,i);
+  const idx=h_e.findIndex(e=>e[0]==a&&e[1]==b);
+  if(idx>=0)h_e.splice(idx,1);else h_e.push([a,b]);h_sel=-1;}
+ h_draw();}
+function h_hint(){const n=+$("h_n").value,k=+$("h_k").value;
+ $("h_h").textContent="Каждое рукопожатие считается у двух людей. Значит, сумма чисел на точках всегда чётная. Нужная сумма: "+n+"·"+k+" = "+(n*k)+". Она чётная?";}
+
+/* 3. Плюсы и минусы */
+let s_sg=[];
+function s_init(){let n=Math.max(2,Math.min(30,+$("s_n").value||10));s_sg=Array(n).fill(1);say("s_msg","");$("s_h").textContent="";s_draw();}
+function s_draw(){
+ let h="",sum=0;s_sg.forEach((v,i)=>{sum+=v*(i+1);
+  h+='<div class="sg"><div>'+(i+1)+'</div><button class="'+(i==0?'gray':(v>0?'p':'m'))+'" '+(i==0?'disabled':'onclick="s_t('+i+')"')+'>'+(v>0?'+':'−')+'</button></div>';});
+ $("s_board").innerHTML=h;$("s_sum").textContent=sum;
+ if(sum==0)say("s_msg","Ноль! Получилось.","ok");else say("s_msg","");}
+function s_t(i){s_sg[i]*=-1;s_draw();}
+function s_hint(){const n=s_sg.length,t=n*(n+1)/2;
+ $("s_h").textContent="Если все знаки «+», сумма равна "+t+". Замена «+» на «−» у числа k уменьшает сумму на 2k. Это чётное число. Как тогда может измениться чётность суммы?";}
+
+/* 4. Конь */
+let k_pos,k_hist=[];
+const K_START=[7,0];
+function k_init(){k_pos=[7,0];k_hist=[];say("k_msg","");$("k_h").textContent="";k_draw();}
+function k_legal(r,c){const d=[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
+ return d.map(x=>[r+x[0],c+x[1]]).filter(p=>p[0]>=0&&p[0]<8&&p[1]>=0&&p[1]<8);}
+function k_draw(){
+ const T=+$("k_t").value,done=k_hist.length>=T,leg=$("k_leg").checked&&!done;
+ const L=k_legal(k_pos[0],k_pos[1]);let h="";
+ for(let r=0;r<8;r++){h+="<tr>";for(let c=0;c<8;c++){
+  let cls=((r+c)%2==0)?"w":"k";
+  if(leg&&L.some(p=>p[0]==r&&p[1]==c))cls+=" leg";
+  if(r==K_START[0]&&c==K_START[1])cls+=" start";
+  const on=(k_pos[0]==r&&k_pos[1]==c);
+  h+='<td class="'+cls+'" onclick="k_click('+r+','+c+')">'+(on?"♞":"")+"</td>";}h+="</tr>";}
+ $("k_tab").innerHTML=h;$("k_cnt").textContent=k_hist.length+" из "+T;
+ if(done){if(k_pos[0]==K_START[0]&&k_pos[1]==K_START[1])say("k_msg","Конь вернулся ровно за "+T+" ходов!","ok");
+  else say("k_msg","Ходы закончились, конь не дома. Попробуй ещё раз или возьми подсказку.","bad");}else say("k_msg","");}
+function k_click(r,c){
+ const T=+$("k_t").value;if(k_hist.length>=T)return;
+ if(!k_legal(k_pos[0],k_pos[1]).some(p=>p[0]==r&&p[1]==c))return;
+ k_hist.push(k_pos);k_pos=[r,c];k_draw();}
+function k_undo(){if(!k_hist.length)return;k_pos=k_hist.pop();k_draw();}
+function k_hint(){
+ $("k_h").textContent="Посмотри на цвет клетки, на которой стоит конь, после каждого хода. Он меняется или нет? Какой тогда должна быть чётность числа ходов, чтобы вернуться на клетку того же цвета?";}
+
+tab(1);c_init();h_init();s_init();k_init();
+</script></body></html>
