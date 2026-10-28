@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Четыре игры на чётность</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
-body{font-family:system-ui,sans-serif;max-width:780px;margin:16px auto;padding:0 12px;background:#f4f6fa;color:#222}
+body{font-family:system-ui,sans-serif;max-width:780px;margin:16px auto;padding:0 12px;background:#f4f6fa;color:#222;position:relative}
 h2{margin:6px 0}
 .tabs button{background:#e5e7eb;color:#222}.tabs button.on{background:#3b82f6;color:#fff}
 button{padding:8px 14px;margin:3px;border:0;border-radius:8px;background:#3b82f6;color:#fff;font-size:15px;cursor:pointer}
@@ -23,9 +24,23 @@ table.b td{width:44px;height:44px;text-align:center;font-size:26px;border:1px so
 td.w{background:#f3e8c8}td.k{background:#a67c52}td.leg{outline:3px solid #3b82f6;outline-offset:-3px;cursor:pointer}
 td.start{box-shadow:inset 0 0 0 3px #10b981}
 svg text{pointer-events:none}
+#net{font-size:14px}
+#net .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#9ca3af;margin-right:6px}
+#net .dot.on{background:#10b981}
+#rc{position:absolute;display:none;width:20px;height:20px;border-radius:50%;background:rgba(239,68,68,.55);border:2px solid #fff;pointer-events:none;z-index:99;box-shadow:0 0 6px #0006}
+#link{width:100%;box-sizing:border-box}
 </style></head><body>
 <h2>Четыре игры на чётность</h2>
-<div class="tabs">
+<div class="card" id="net">
+<span class="dot" id="dot"></span><span id="netst">Не подключено</span>
+<div id="hostui" style="margin-top:6px">
+<button onclick="makeRoom()" id="mk">Создать комнату для урока</button>
+<div id="linkbox" style="display:none">
+<input id="link" readonly onclick="this.select()">
+<button class="alt" onclick="copyLink()">Копировать ссылку</button>
+</div></div>
+</div>
+<div class="tabs" style="margin-top:10px">
 <button onclick="tab(1)" id="t1">1. Монетки</button>
 <button onclick="tab(2)" id="t2">2. Рукопожатия</button>
 <button onclick="tab(3)" id="t3">3. Плюсы и минусы</button>
@@ -46,7 +61,7 @@ svg text{pointer-events:none}
 <b>Рукопожатия.</b> Соединяй людей линиями (клик по двум точкам; повторный клик по той же паре удаляет линию). Цель: чтобы у каждого было ровно столько рукопожатий, сколько задано.<br>
 Людей: <select id="h_n" onchange="h_init()"><option>4</option><option>5</option><option selected>6</option><option>7</option><option>8</option><option>9</option></select>
 Каждому нужно: <select id="h_k" onchange="h_init()"><option>1</option><option>2</option><option selected>3</option><option>4</option></select>
-<div><svg id="h_svg" width="360" height="360" viewBox="0 0 360 360"></svg></div>
+<div><svg id="h_svg" width="360" height="360" viewBox="0 0 360 360" style="max-width:100%;height:auto"></svg></div>
 <button class="gray" onclick="h_init()">Очистить</button><button class="alt" onclick="h_hint()">Подсказка</button>
 <div class="msg" id="h_msg"></div><div class="hint" id="h_h"></div>
 </div>
@@ -63,37 +78,38 @@ svg text{pointer-events:none}
 <div class="card game" id="g4">
 <b>Конь.</b> Конь стоит в левом нижнем углу (зелёная рамка). Цель: вернуться на эту клетку ровно за заданное число ходов.<br>
 Число ходов: <select id="k_t" onchange="k_init()"><option>6</option><option>7</option><option selected>15</option><option>16</option></select>
-<label><input type="checkbox" id="k_leg" checked onchange="k_draw()"> подсвечивать ходы</label>
+<label><input type="checkbox" id="k_leg" checked onchange="k_draw();sync()"> подсвечивать ходы</label>
 <table class="b" id="k_tab"></table>
 <div>Сделано ходов: <b id="k_cnt">0</b></div>
 <button class="gray" onclick="k_init()">Заново</button><button class="gray" onclick="k_undo()">Отмена хода</button><button class="alt" onclick="k_hint()">Подсказка</button>
 <div class="msg" id="k_msg"></div><div class="hint" id="k_h"></div>
 </div>
+<div id="rc"></div>
 
 <script>
 const $=id=>document.getElementById(id);
-function tab(i){for(let j=1;j<=4;j++){$("g"+j).classList.toggle("on",i==j);$("t"+j).classList.toggle("on",i==j);}}
+let cur=1,applying=false;
+function tab(i){cur=i;for(let j=1;j<=4;j++){$("g"+j).classList.toggle("on",i==j);$("t"+j).classList.toggle("on",i==j);}sync();}
 function say(id,t,c){const e=$(id);e.textContent=t;e.className="msg "+(c||"");}
 
 /* 1. Монетки */
 let c_s=[],c_sel=[],c_m=0;
-function c_init(){const n=+$("c_n").value;c_s=Array(n).fill(0);c_sel=[];c_m=0;say("c_msg","");$("c_h").textContent="";c_draw();}
+function c_init(){const n=+$("c_n").value;c_s=Array(n).fill(0);c_sel=[];c_m=0;$("c_h").textContent="";c_draw();sync();}
 function c_draw(){
  let h="";c_s.forEach((v,i)=>{h+='<span class="coin '+(v?'T':'H')+(c_sel.includes(i)?' sel':'')+'" onclick="c_click('+i+')">'+(v?'Р':'О')+'</span>'});
- $("c_board").innerHTML=h;$("c_moves").textContent=c_m;$("c_t").textContent=c_s.reduce((a,b)=>a+b,0);}
-function c_click(i){const k=c_sel.indexOf(i);if(k>=0)c_sel.splice(k,1);else{if(c_sel.length>=2)c_sel.shift();c_sel.push(i);}c_draw();}
+ $("c_board").innerHTML=h;$("c_moves").textContent=c_m;$("c_t").textContent=c_s.reduce((a,b)=>a+b,0);
+ if(c_m>0&&c_s.every(v=>v==1))say("c_msg","Получилось за "+c_m+" ходов! Все решки.","ok");else say("c_msg","");}
+function c_click(i){const k=c_sel.indexOf(i);if(k>=0)c_sel.splice(k,1);else{if(c_sel.length>=2)c_sel.shift();c_sel.push(i);}c_draw();sync();}
 function c_flip(){
  if(c_sel.length!=2){say("c_msg","Выбери ровно две монетки.","bad");return;}
- c_sel.forEach(i=>c_s[i]^=1);c_sel=[];c_m++;c_draw();
- if(c_s.every(v=>v==1))say("c_msg","Получилось за "+c_m+" ходов! Все решки.","ok");else say("c_msg","");}
+ c_sel.forEach(i=>c_s[i]^=1);c_sel=[];c_m++;c_draw();sync();}
 function c_hint(){const n=c_s.length;
  $("c_h").textContent="Следи за числом решек. Каждый ход меняет его на 2 вверх, на 2 вниз или не меняет. Сейчас решек "+c_s.reduce((a,b)=>a+b,0)+", а нужно "+n+". Как у них чётность: одинаковая или разная?";}
 
 /* 2. Рукопожатия */
 let h_e=[],h_sel=-1,h_pos=[];
-function h_init(){const n=+$("h_n").value;h_e=[];h_sel=-1;h_pos=[];
- for(let i=0;i<n;i++){const a=2*Math.PI*i/n-Math.PI/2;h_pos.push([180+130*Math.cos(a),180+130*Math.sin(a)]);}
- say("h_msg","");$("h_h").textContent="";h_draw();}
+function h_layout(n){h_pos=[];for(let i=0;i<n;i++){const a=2*Math.PI*i/n-Math.PI/2;h_pos.push([180+130*Math.cos(a),180+130*Math.sin(a)]);}}
+function h_init(){h_e=[];h_sel=-1;h_layout(+$("h_n").value);$("h_h").textContent="";h_draw();sync();}
 function h_deg(i){return h_e.filter(e=>e[0]==i||e[1]==i).length;}
 function h_draw(){
  const k=+$("h_k").value;let s="";
@@ -108,26 +124,26 @@ function h_click(i){
   const a=Math.min(h_sel,i),b=Math.max(h_sel,i);
   const idx=h_e.findIndex(e=>e[0]==a&&e[1]==b);
   if(idx>=0)h_e.splice(idx,1);else h_e.push([a,b]);h_sel=-1;}
- h_draw();}
+ h_draw();sync();}
 function h_hint(){const n=+$("h_n").value,k=+$("h_k").value;
  $("h_h").textContent="Каждое рукопожатие считается у двух людей. Значит, сумма чисел на точках всегда чётная. Нужная сумма: "+n+"·"+k+" = "+(n*k)+". Она чётная?";}
 
 /* 3. Плюсы и минусы */
 let s_sg=[];
-function s_init(){let n=Math.max(2,Math.min(30,+$("s_n").value||10));s_sg=Array(n).fill(1);say("s_msg","");$("s_h").textContent="";s_draw();}
+function s_init(){let n=Math.max(2,Math.min(30,+$("s_n").value||10));$("s_n").value=n;s_sg=Array(n).fill(1);$("s_h").textContent="";s_draw();sync();}
 function s_draw(){
  let h="",sum=0;s_sg.forEach((v,i)=>{sum+=v*(i+1);
   h+='<div class="sg"><div>'+(i+1)+'</div><button class="'+(i==0?'gray':(v>0?'p':'m'))+'" '+(i==0?'disabled':'onclick="s_t('+i+')"')+'>'+(v>0?'+':'−')+'</button></div>';});
  $("s_board").innerHTML=h;$("s_sum").textContent=sum;
  if(sum==0)say("s_msg","Ноль! Получилось.","ok");else say("s_msg","");}
-function s_t(i){s_sg[i]*=-1;s_draw();}
+function s_t(i){s_sg[i]*=-1;s_draw();sync();}
 function s_hint(){const n=s_sg.length,t=n*(n+1)/2;
  $("s_h").textContent="Если все знаки «+», сумма равна "+t+". Замена «+» на «−» у числа k уменьшает сумму на 2k. Это чётное число. Как тогда может измениться чётность суммы?";}
 
 /* 4. Конь */
-let k_pos,k_hist=[];
+let k_pos=[7,0],k_hist=[];
 const K_START=[7,0];
-function k_init(){k_pos=[7,0];k_hist=[];say("k_msg","");$("k_h").textContent="";k_draw();}
+function k_init(){k_pos=[7,0];k_hist=[];$("k_h").textContent="";k_draw();sync();}
 function k_legal(r,c){const d=[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
  return d.map(x=>[r+x[0],c+x[1]]).filter(p=>p[0]>=0&&p[0]<8&&p[1]>=0&&p[1]<8);}
 function k_draw(){
@@ -145,10 +161,64 @@ function k_draw(){
 function k_click(r,c){
  const T=+$("k_t").value;if(k_hist.length>=T)return;
  if(!k_legal(k_pos[0],k_pos[1]).some(p=>p[0]==r&&p[1]==c))return;
- k_hist.push(k_pos);k_pos=[r,c];k_draw();}
-function k_undo(){if(!k_hist.length)return;k_pos=k_hist.pop();k_draw();}
+ k_hist.push(k_pos);k_pos=[r,c];k_draw();sync();}
+function k_undo(){if(!k_hist.length)return;k_pos=k_hist.pop();k_draw();sync();}
 function k_hint(){
  $("k_h").textContent="Посмотри на цвет клетки, на которой стоит конь, после каждого хода. Он меняется или нет? Какой тогда должна быть чётность числа ходов, чтобы вернуться на клетку того же цвета?";}
 
+/* Синхронизация */
+let peer=null,conn=null,isHost=true,lastCur=0,hideT=null;
+function getState(){return{tab:cur,
+ c:{n:$("c_n").value,s:c_s,sel:c_sel,m:c_m},
+ h:{n:$("h_n").value,k:$("h_k").value,e:h_e,sel:h_sel},
+ s:{n:$("s_n").value,sg:s_sg},
+ k:{t:$("k_t").value,leg:$("k_leg").checked,pos:k_pos,hist:k_hist}};}
+function applyState(d){
+ applying=true;
+ $("c_n").value=d.c.n;c_s=d.c.s;c_sel=d.c.sel;c_m=d.c.m;c_draw();
+ $("h_n").value=d.h.n;$("h_k").value=d.h.k;h_e=d.h.e;h_sel=d.h.sel;h_layout(+d.h.n);h_draw();
+ $("s_n").value=d.s.n;s_sg=d.s.sg;s_draw();
+ $("k_t").value=d.k.t;$("k_leg").checked=d.k.leg;k_pos=d.k.pos;k_hist=d.k.hist;k_draw();
+ tab(d.tab);
+ applying=false;}
+function sync(){if(applying)return;if(conn&&conn.open)conn.send({t:"state",d:getState()});}
+function setStatus(t,on){$("netst").textContent=t;$("dot").className="dot"+(on?" on":"");}
+function onData(m){
+ if(m.t=="state")applyState(m.d);
+ else if(m.t=="cur"&&m.tab==cur){
+  const r=$("g"+cur).getBoundingClientRect(),rc=$("rc");
+  rc.style.left=(r.left+window.scrollX+m.x*r.width-10)+"px";
+  rc.style.top=(r.top+window.scrollY+m.y*r.height-10)+"px";
+  rc.style.display="block";clearTimeout(hideT);hideT=setTimeout(()=>rc.style.display="none",3000);}}
+function setupConn(c){
+ conn=c;
+ c.on("open",()=>{setStatus(isHost?"Ученик подключился":"Подключено к учителю",true);if(isHost)sync();});
+ c.on("data",onData);
+ c.on("close",()=>{setStatus(isHost?"Ученик отключился (ждём подключения)":"Соединение потеряно. Обнови страницу.",false);});}
+function newCode(){return Math.random().toString(36).slice(2,7);}
+function baseUrl(){return location.origin+location.pathname;}
+function makeRoom(){
+ const code=newCode();
+ setStatus("Создаём комнату...",false);
+ peer=new Peer("pmg-"+code);
+ peer.on("open",()=>{
+  $("link").value=baseUrl()+"?room="+code;$("linkbox").style.display="block";$("mk").style.display="none";
+  setStatus("Комната создана. Ждём ученика...",false);});
+ peer.on("connection",c=>{if(conn&&conn.open)conn.close();setupConn(c);});
+ peer.on("error",e=>{if(e.type=="unavailable-id"){peer.destroy();makeRoom();}else setStatus("Ошибка: "+e.type,false);});}
+function copyLink(){const l=$("link");l.select();(navigator.clipboard?navigator.clipboard.writeText(l.value):Promise.reject()).catch(()=>document.execCommand("copy"));}
+function joinRoom(code){
+ isHost=false;$("hostui").style.display="none";
+ setStatus("Подключаемся к учителю...",false);
+ peer=new Peer();
+ peer.on("open",()=>{const c=peer.connect("pmg-"+code,{reliable:true});setupConn(c);});
+ peer.on("error",e=>{setStatus(e.type=="peer-unavailable"?"Комната не найдена. Попроси учителя создать её и прислать свежую ссылку.":"Ошибка: "+e.type,false);});}
+document.addEventListener("pointermove",e=>{
+ const now=Date.now();if(now-lastCur<60||!conn||!conn.open)return;lastCur=now;
+ const r=$("g"+cur).getBoundingClientRect();
+ conn.send({t:"cur",tab:cur,x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height});});
+
 tab(1);c_init();h_init();s_init();k_init();
+const roomParam=new URLSearchParams(location.search).get("room");
+if(roomParam)joinRoom(roomParam);
 </script></body></html>
